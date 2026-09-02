@@ -1152,7 +1152,7 @@ function FplClearanceDialog({
               </div>
               <div className="clearance-sid-footer">
                 <button onClick={() => onSidChange(stripId, "")}>ERASE</button>
-                <button onClick={() => setSidMenuOpen(false)}>ESC</button>
+                <button onClick={() => setSidMenuOpen(false)}>OK</button>
               </div>
             </div>
           </div>
@@ -2065,7 +2065,19 @@ export default function App() {
   >({});
   const lastKnownStandRef = useRef<Record<string, string>>({});
   const manualStandOverridesRef = useRef<Record<string, string>>({});
+  const lockedClearanceFieldsRef = useRef<
+    Record<string, Set<"U2" | "U3" | "B3" | "B4" | "rnav" | "radisRemarks">>
+  >({});
   const pilotPositionRef = useRef<Record<string, PilotPosition>>({});
+
+  function lockClearanceField(
+    stripId: string,
+    field: "U2" | "U3" | "B3" | "B4" | "rnav" | "radisRemarks",
+  ) {
+    const fields = lockedClearanceFieldsRef.current[stripId] ?? new Set();
+    fields.add(field);
+    lockedClearanceFieldsRef.current[stripId] = fields;
+  }
 
   useEffect(() => {
     try {
@@ -2090,16 +2102,20 @@ export default function App() {
           ? "VFR"
           : getEkbiSid(data, departureRunway);
         const enteredLevel = sid && !values.B4 ? "FL60" : values.B4;
+        const lockedFields = lockedClearanceFieldsRef.current[stripId];
+        const nextRunway = lockedFields?.has("U2") ? values.U2 : runway;
+        const nextSid = lockedFields?.has("B3") ? values.B3 : sid;
+        const nextLevel = lockedFields?.has("B4") ? values.B4 : enteredLevel;
         if (
-          values.U2 !== runway ||
-          values.B3 !== sid ||
-          values.B4 !== enteredLevel
+          values.U2 !== nextRunway ||
+          values.B3 !== nextSid ||
+          values.B4 !== nextLevel
         ) {
           next[stripId] = {
             ...values,
-            U2: runway,
-            B3: sid,
-            B4: enteredLevel,
+            U2: nextRunway,
+            B3: nextSid,
+            B4: nextLevel,
           };
         }
       });
@@ -2233,7 +2249,18 @@ export default function App() {
                 strip.source === "manual" || strip.source === "planned",
             ),
           );
-          return { ...persistentStrips, ...nextData };
+          const persistentCallsigns = new Set(
+            Object.values(persistentStrips).map((strip) =>
+              normalizeCallsign(strip.callsign),
+            ),
+          );
+          const liveStrips = Object.fromEntries(
+            Object.entries(nextData).filter(
+              ([, strip]) =>
+                !persistentCallsigns.has(normalizeCallsign(strip.callsign)),
+            ),
+          );
+          return { ...liveStrips, ...persistentStrips };
         });
         setStripValues((current) => {
           const next = { ...current };
@@ -2259,34 +2286,62 @@ export default function App() {
           const occupiedStandNumbers = new Set<string>();
 
           Object.entries(current).forEach(([stripId, assignedStand]) => {
-            if (assignedStand && !nextData[stripId]) {
+            const currentStrip = stripData[stripId];
+            if (
+              assignedStand &&
+              (!nextData[stripId] || currentStrip?.stripType === "DEPARTURE")
+            ) {
               occupiedStandNumbers.add(assignedStand);
             }
           });
 
-          Object.entries(nextData).forEach(([stripId, data]) => {
-            const manualStand = manualStandOverridesRef.current[stripId];
-            if (manualStand !== undefined) {
-              next[stripId] = manualStand;
-              return;
-            }
+          Object.entries(nextData)
+            .filter(([, data]) => data.stripType === "DEPARTURE")
+            .forEach(([stripId, data]) => {
+              const manualStand = manualStandOverridesRef.current[stripId];
+              const pilotPosition =
+                pilotPositionRef.current[normalizeCallsign(data.callsign)];
+              const assignedStand =
+                manualStand ??
+                findStandForStrip(
+                  data,
+                  standAssignments,
+                  pilotPosition,
+                  lastKnownStandRef.current[stripId],
+                  selectedAirport,
+                );
+              next[stripId] = assignedStand;
+              if (assignedStand) {
+                occupiedStandNumbers.add(assignedStand);
+                lastKnownStandRef.current[stripId] = assignedStand;
+              }
+            });
 
-            const pilotPosition =
-              pilotPositionRef.current[normalizeCallsign(data.callsign)];
-            const assignedStand = findStandForStrip(
-              data,
-              standAssignments,
-              pilotPosition,
-              lastKnownStandRef.current[stripId],
-              selectedAirport,
-              Array.from(occupiedStandNumbers),
-            );
-            next[stripId] = assignedStand;
-            if (assignedStand) {
-              occupiedStandNumbers.add(assignedStand);
-              lastKnownStandRef.current[stripId] = assignedStand;
-            }
-          });
+          Object.entries(nextData)
+            .filter(([, data]) => data.stripType === "ARRIVAL")
+            .forEach(([stripId, data]) => {
+              const manualStand = manualStandOverridesRef.current[stripId];
+              if (manualStand !== undefined) {
+                next[stripId] = manualStand;
+                return;
+              }
+
+              const pilotPosition =
+                pilotPositionRef.current[normalizeCallsign(data.callsign)];
+              const assignedStand = findStandForStrip(
+                data,
+                standAssignments,
+                pilotPosition,
+                lastKnownStandRef.current[stripId],
+                selectedAirport,
+                Array.from(occupiedStandNumbers),
+              );
+              next[stripId] = assignedStand;
+              if (assignedStand) {
+                occupiedStandNumbers.add(assignedStand);
+                lastKnownStandRef.current[stripId] = assignedStand;
+              }
+            });
           return next;
         });
       } catch {
@@ -2462,6 +2517,7 @@ export default function App() {
   }
 
   function updateSid(stripId: string, sid: string) {
+    lockClearanceField(stripId, "B3");
     setStripValues((current) => ({
       ...current,
       [stripId]: {
@@ -2472,6 +2528,7 @@ export default function App() {
   }
 
   function selectVfr(stripId: string) {
+    lockClearanceField(stripId, "B3");
     setStripValues((current) => ({
       ...current,
       [stripId]: {
@@ -2484,6 +2541,7 @@ export default function App() {
   }
 
   function updateRnav(stripId: string, rnav: string) {
+    lockClearanceField(stripId, "rnav");
     setStripValues((current) => ({
       ...current,
       [stripId]: {
@@ -2494,6 +2552,7 @@ export default function App() {
   }
 
   function updateRadisRemarks(stripId: string, remarks: string) {
+    lockClearanceField(stripId, "radisRemarks");
     setStripValues((current) => ({
       ...current,
       [stripId]: {
@@ -2524,10 +2583,21 @@ export default function App() {
       return;
     }
 
+    const callsign = normalizeCallsign(plannedStrip.callsign);
+    setHiddenCallsigns((current) => {
+      if (!current.has(callsign)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(callsign);
+      return next;
+    });
+
     const existingStripId = Object.entries(stripData).find(
       ([, strip]) =>
         normalizeCallsign(strip.callsign) ===
-        normalizeCallsign(plannedStrip.callsign),
+        callsign,
     )?.[0];
     const stripId =
       existingStripId ?? `planned-${plannedStrip.callsign}-${Date.now()}`;
@@ -2688,6 +2758,8 @@ export default function App() {
 
       if (menuState.type === "RTE") {
         if (/^\d{3}$/.test(cleaned)) {
+          lockClearanceField(menuState.stripId, "U3");
+          lockClearanceField(menuState.stripId, "B3");
           return {
             ...current,
             [menuState.stripId]: {
@@ -2699,6 +2771,8 @@ export default function App() {
         }
 
         if (/^[A-Z]{3}$/.test(cleaned) || /^[A-Z]{5}$/.test(cleaned)) {
+          lockClearanceField(menuState.stripId, "U3");
+          lockClearanceField(menuState.stripId, "B3");
           return {
             ...current,
             [menuState.stripId]: {
@@ -2717,6 +2791,8 @@ export default function App() {
           return current;
         }
 
+        lockClearanceField(menuState.stripId, "B4");
+
         return {
           ...current,
           [menuState.stripId]: {
@@ -2729,6 +2805,10 @@ export default function App() {
       if (menuState.type === "RWY") {
         if (!cleaned) {
           return current;
+        }
+
+        if ((menuState.target ?? "U2") === "U2") {
+          lockClearanceField(menuState.stripId, "U2");
         }
 
         return {
@@ -2798,6 +2878,17 @@ export default function App() {
     if (overId === DELETE_BAY_ID) {
       const strip = stripData[activeId];
       if (strip) {
+        const callsign = normalizeCallsign(strip.callsign);
+        setHiddenCallsigns((current) => {
+          if (current.has(callsign)) {
+            return current;
+          }
+
+          const next = new Set(current);
+          next.add(callsign);
+          return next;
+        });
+
         if (strip.source === "manual" || strip.source === "planned") {
           setStripData((current) => {
             const next = { ...current };
@@ -2825,17 +2916,6 @@ export default function App() {
           setActiveDragId(null);
           return;
         }
-
-        const callsign = normalizeCallsign(strip.callsign);
-        setHiddenCallsigns((current) => {
-          if (current.has(callsign)) {
-            return current;
-          }
-
-          const next = new Set(current);
-          next.add(callsign);
-          return next;
-        });
       }
       setActiveDragId(null);
       return;
