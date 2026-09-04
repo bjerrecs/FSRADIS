@@ -1,0 +1,12 @@
+# Pulls the prebuilt image published by .github/workflows/docker-publish.yml.
+# Use this for a Portainer stack created from a web editor / URL, with no build step.
+services:
+  fsradis:
+    image: ghcr.io/OWNER/fsradis:latest
+    container_name: fsradis
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    # Optional: edit stand assignments without rebuilding the image.
+    # volumes:
+    #   - /opt/fsradis/standassignment.txt:/usr/share/nginx/html/standassignment.txt:ro

@@ -1,0 +1,15 @@
+# Builds the image from this repository.
+# Use this when deploying a Portainer stack with the "Repository" build method.
+services:
+  fsradis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fsradis:latest
+    container_name: fsradis
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    # Optional: edit stand assignments without rebuilding the image.
+    # volumes:
+    #   - ./frontend/public/standassignment.txt:/usr/share/nginx/html/standassignment.txt:ro
