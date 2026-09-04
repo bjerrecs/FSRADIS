@@ -2,7 +2,7 @@
 # Use this for a Portainer stack created from a web editor / URL, with no build step.
 services:
   fsradis:
-    image: ghcr.io/OWNER/fsradis:latest
+    image: ghcr.io/bjerrecs/fsradis:latest
     container_name: fsradis
     restart: unless-stopped
     ports:

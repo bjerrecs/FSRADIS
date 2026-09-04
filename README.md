@@ -80,12 +80,13 @@ a prebuilt one.
 every push to `main` and on `v*` tags. In Portainer:
 
 1. **Stacks → Add stack → Web editor**.
-2. Paste the contents of `docker-compose.prod.yml`, replacing `OWNER` in the
-   image name with this repository's owner.
-3. If the GHCR package is private, add a registry credential first under
-   **Registries** (a GitHub PAT with `read:packages`), or make the package
-   public from the repository's **Packages** page.
-4. **Deploy the stack**.
+2. Paste the contents of `docker-compose.prod.yml` — it already points at
+   `ghcr.io/bjerrecs/fsradis:latest`.
+3. **Deploy the stack**.
+
+The GHCR package inherits the repository's public visibility on first publish,
+so no registry credentials are needed. If you later make the repo private, add a
+credential under **Registries** (a GitHub PAT with `read:packages`).
 
 To update later, hit **Pull and redeploy** on the stack.
 
