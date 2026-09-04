@@ -98,8 +98,25 @@ To update later, hit **Pull and redeploy** on the stack.
 
 ## Behind Nginx Proxy Manager
 
-Deploy with `docker-compose.npm.yml`, which joins the proxy's Docker network and
-publishes no host port. Then in NPM, **Details**:
+The proxy and this container must sit on the **same Docker network**. Docker
+bridge networks do not route between each other, so a proxy on one network
+cannot reach this container on another no matter which port it targets -- that
+shows up as a 502.
+
+The quickest way to fix an already-running container is to attach it in place,
+with no redeploy:
+
+```bash
+# find the network your proxy is on
+docker ps --format '{{.Names}}' | while read c; do   printf "%-28s %s
+" "$c"   "$(docker inspect "$c" -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}')"; done
+
+docker network connect <npm-network> fsradis
+```
+
+For a permanent stack definition use `docker-compose.npm.yml`, which joins that
+network and publishes no host port -- set `NPM_NETWORK` (or edit the `name:`
+line) to the network you found above. Then in NPM, **Details**:
 
 | Field | Value |
 | --- | --- |
@@ -115,8 +132,8 @@ Two things trip this up:
   `<container-ip>:8080` gives a connection refused, and NPM reports 502.
 - **Use the container name, not its IP.** Container IPs are reassigned on
   redeploy, so a hard-coded `172.x.x.x` breaks the next time you pull and
-  redeploy. The name resolves only if both containers share a network, which is
-  what the compose file arranges.
+  redeploy. Once the container is on two networks it also has two addresses, and
+  the name resolves to the right one automatically.
 
 On the **SSL** tab, enable **Force SSL** so the site is not served over plain
 HTTP. **Cache Assets** should stay off -- this container already sends correct

@@ -4,8 +4,14 @@
 #   * the target port is 80 -- the container's own port, NOT a published one
 #   * no host port is published, so the app is only reachable via the proxy
 #
-# Set NPM_NETWORK to the network your proxy container is already on. Find it with:
-#   docker inspect <npm-container> -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
+# BEFORE DEPLOYING: replace SET_NPM_NETWORK below with the network your proxy
+# container is already on -- either edit the `name:` line directly, or set an
+# NPM_NETWORK environment variable on the stack. Find the network with:
+#
+#   docker ps --format '{{.Names}}' | while read c; do #     printf "%-28s %s
+" "$c" #     "$(docker inspect "$c" -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}')"; #   done
+#
+# The network must already exist; this stack attaches to it rather than creating it.
 services:
   fsradis:
     image: ghcr.io/bjerrecs/fsradis:latest
@@ -20,4 +26,4 @@ services:
 networks:
   proxy:
     external: true
-    name: ${NPM_NETWORK:-npm_default}
+    name: ${NPM_NETWORK:-SET_NPM_NETWORK}
