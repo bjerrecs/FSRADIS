@@ -1,5 +1,5 @@
 # Pulls the prebuilt image published by .github/workflows/docker-publish.yml.
-# Use this for a Portainer stack created from a web editor / URL, with no build step.
+# Use this for a Portainer stack created from the web editor, with no build step.
 services:
   fsradis:
     image: ghcr.io/bjerrecs/fsradis:latest

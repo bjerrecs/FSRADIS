@@ -96,7 +96,34 @@ To update later, hit **Pull and redeploy** on the stack.
 2. Repository URL: this repo. Compose path: `docker-compose.yml`.
 3. **Deploy the stack** — Portainer clones and builds the image on your host.
 
+## Behind Nginx Proxy Manager
+
+Deploy with `docker-compose.npm.yml`, which joins the proxy's Docker network and
+publishes no host port. Then in NPM, **Details**:
+
+| Field | Value |
+| --- | --- |
+| Domain Names | your hostname |
+| Scheme | `http` |
+| Forward Hostname / IP | `fsradis` |
+| Forward Port | `80` |
+
+Two things trip this up:
+
+- **The forward port is 80, not 8080.** `8080` is a *host* published port; it
+  does not exist on the container's own address. Pointing the proxy at
+  `<container-ip>:8080` gives a connection refused, and NPM reports 502.
+- **Use the container name, not its IP.** Container IPs are reassigned on
+  redeploy, so a hard-coded `172.x.x.x` breaks the next time you pull and
+  redeploy. The name resolves only if both containers share a network, which is
+  what the compose file arranges.
+
+On the **SSL** tab, enable **Force SSL** so the site is not served over plain
+HTTP. **Cache Assets** should stay off -- this container already sends correct
+cache headers, and NPM's caching would also cache `index.html`, pinning clients
+to a stale asset manifest. **Websockets Support** is harmless but unused.
+
 ### Port
 
-Both compose files publish `8080:80`. Change the left-hand number if 8080 is
+The build and prod compose files publish `8080:80`. Change the left-hand number if 8080 is
 taken, or drop `ports:` entirely and attach it to your reverse proxy network.

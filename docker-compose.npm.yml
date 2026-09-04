@@ -1,0 +1,23 @@
+# Deployment behind Nginx Proxy Manager (or any reverse proxy in Docker).
+#
+# The proxy reaches this container over a shared Docker network, so:
+#   * the target port is 80 -- the container's own port, NOT a published one
+#   * no host port is published, so the app is only reachable via the proxy
+#
+# Set NPM_NETWORK to the network your proxy container is already on. Find it with:
+#   docker inspect <npm-container> -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
+services:
+  fsradis:
+    image: ghcr.io/bjerrecs/fsradis:latest
+    container_name: fsradis
+    restart: unless-stopped
+    networks:
+      - proxy
+    # Optional: edit stand assignments without rebuilding the image.
+    # volumes:
+    #   - /opt/fsradis/standassignment.txt:/usr/share/nginx/html/standassignment.txt:ro
+
+networks:
+  proxy:
+    external: true
+    name: ${NPM_NETWORK:-npm_default}
